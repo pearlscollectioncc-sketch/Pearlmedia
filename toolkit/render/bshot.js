@@ -15,7 +15,7 @@ add('Jost', 'j300', `${R}/jost/files/jost-latin-300-normal.woff2`, 300);
 const css = faces.join('\n');
 const types = { '.html': 'text/html', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml' };
 (async () => {
-  const b = await chromium.launch({ executablePath: require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined });
+  const b = await chromium.launch();
   for (const [name, [w, h, transparent, scale]] of Object.entries(sizes)) {
     const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: scale || 1 });
     await p.route('**/*', r => { const u = new URL(r.request().url());

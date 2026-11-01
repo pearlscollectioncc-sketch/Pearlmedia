@@ -65,6 +65,35 @@ def tip(p):
 <span style="margin-top:auto;align-self:flex-start;display:inline-flex;background:{INK};color:#fff;border-radius:999px;padding:24px 42px;font-family:'Jost',sans-serif;font-weight:600;font-size:34px">Free plan: WhatsApp +971 58 611 8979</span></div>''')
 
 
+_PW_CHECK = "const fs=require('fs');process.exit(fs.existsSync(require('playwright').chromium.executablePath())?0:1)"
+
+
+def playwright_env(rd):
+    """Return an env in which bshot.js finds a Playwright whose browser is actually installed.
+    Prefers the machine's preinstalled Playwright (global npm root); a local copy in render/node_modules
+    shadows it and usually expects a different browser build, so it is removed when it doesn't work.
+    Only if no working Playwright exists is a local one installed together with its browser."""
+    env = dict(os.environ)
+    try:
+        groot = subprocess.run(['npm', 'root', '-g'], capture_output=True, text=True).stdout.strip()
+        if groot:
+            env['NODE_PATH'] = groot + (os.pathsep + env['NODE_PATH'] if env.get('NODE_PATH') else '')
+    except OSError:
+        pass
+    ok = lambda: subprocess.run(['node', '-e', _PW_CHECK], cwd=rd, env=env, capture_output=True).returncode == 0
+    if ok():
+        return env
+    local = [os.path.join(rd, 'node_modules', n) for n in ('playwright', 'playwright-core')]
+    if any(os.path.isdir(p) for p in local):
+        for p in local:
+            shutil.rmtree(p, ignore_errors=True)
+        if ok():
+            return env
+    subprocess.run(['npm', 'install', '--silent', '--no-save', 'playwright'], cwd=rd, check=True)
+    subprocess.run(['npx', 'playwright', 'install', 'chromium'], cwd=rd, env=env, check=True)
+    return env
+
+
 def main(spec_path):
     spec = json.load(open(spec_path))
     src = os.path.join(HERE, 'build'); os.makedirs(src, exist_ok=True)
@@ -81,9 +110,9 @@ def main(spec_path):
     rd = os.path.join(HERE, 'render')
     if not os.path.isdir(os.path.join(rd, 'node_modules', '@fontsource')):
         subprocess.run(['npm', 'install', '--silent'], cwd=rd, check=True)
-        subprocess.run(['npm', 'install', '--silent', '--no-save', 'playwright'], cwd=rd, check=False)
     if sizes:
-        subprocess.run(['node', os.path.join(rd, 'bshot.js'), src, out], check=True)
+        env = playwright_env(rd)
+        subprocess.run(['node', os.path.join(rd, 'bshot.js'), src, out], check=True, env=env)
         from PIL import Image
         for n in sizes:
             Image.open(os.path.join(out, n + '.png')).convert('RGB').save(os.path.join(out, n + '.jpg'), quality=92)
